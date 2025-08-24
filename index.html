@@ -329,9 +329,55 @@ function formatDuration(iso) {
   return `${h > 0 ? h + ':' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// YouTube URL'sinden video ID'sini çıkaran fonksiyon
+function extractYouTubeVideoId(url) {
+  const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+  const match = url.match(regex);
+  return match ? match[1] : null;
+}
+
+// URL olup olmadığını kontrol eden fonksiyon
+function isYouTubeURL(text) {
+  return text.includes('youtube.com') || text.includes('youtu.be');
+}
+
+function isValidURL(str) {
+  try {
+    new URL(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+
 async function searchYouTube(query) {
   $("[results]").innerHTML = ""
   Components.Button.loading($("#search-button"))
+  
+  // Eğer girilen text YouTube URL'si ise direkt videoyu başlat
+  if(isValidURL(query))
+  {
+    if (isYouTubeURL(query)) {
+      const videoId = extractYouTubeVideoId(query);
+      if (videoId) {
+        // Videoyu direkt başlat
+        startFilm = videoId;
+        signal.broadcast({start: startFilm});
+        isHost = true;
+        startFilmUI();
+        Components.Button.success($("#search-button"));
+        return;
+      } else {
+        alert("Geçerli bir YouTube URL'si giriniz.");
+        Components.Button.success($("#search-button"));
+        return;
+      }
+    }
+  }
+
+  
+  // Normal arama işlemi
   //const query = 'kemal sunal';
   // Step 1: Search for videos
   const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=24&q=${encodeURIComponent(query + ' full movie')}&key=${API_KEY}`;
@@ -442,7 +488,7 @@ Components.Button.success = function(el){
 </header>
 <div search-area style="font-size:1.5em;padding:20px;" spellcheck="false">
   <div flex-cx padding gap>
-    <input style="font-size:1em;" placeholder="izlemek istediğiniz film..." id="search-input" onkeydown="if(event.keyCode==13){searchYouTube($('#search-input').value)} ">
+    <input style="font-size:1em;" placeholder="film adı yazın veya YouTube URL'si yapıştırın..." id="search-input" onkeydown="if(event.keyCode==13){searchYouTube($('#search-input').value)} ">
     <button style="font-size:1em;" onclick="searchYouTube($('#search-input').value)" id="search-button">Ara</button>
   </div>
 </div>
