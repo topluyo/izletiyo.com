@@ -1,0 +1,610 @@
+<script src="//hasandelibas.github.io/documenter/documenter.js"></script>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.3/socket.io.js" crossorigin="anonymous"></script>
+<header body-class="hide-menu theme-dark">
+  
+  <div onclick="location.reload()" title style="cursor:pointer;">♥️ izletiyo.com</div>
+  <div class="space"></div>
+
+  
+  <input id="share-code" value="">
+  <!--
+  <a id="start-button" button href="#">start</a>
+  -->
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+    body{
+      --primary:#F33;
+      font-family: "Nunito", sans-serif;
+      font-optical-sizing: auto;
+    }
+    [title]{
+      font-size: 24px;
+      color:var(--primary);
+    }
+    main{
+      padding:0em;
+    }
+    iframe{
+      width:100%;
+      height:100%;
+    }
+    [results] br{
+      display:none;
+    }
+    [result]{
+      position:relative;
+      border-radius:1em;
+      cursor:pointer;
+      transition:all .2s;
+    }
+    [result]:hover{
+      transform:scale(.95);
+    }
+    [result-title]{
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      padding:1em;
+      background: linear-gradient(0deg, #000, #000, transparent);
+    }
+    [result-duration]{
+      position: absolute;
+      right: .5em;
+      top: .5em;
+      padding:.5em;
+      border-radius:.5em;
+      font-size:.7em;
+      background:var(--primary);
+      color:var(--primary-text);
+    }
+  </style>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  
+  
+
+  <script>
+
+let params = new URLSearchParams(document.location.search);
+
+
+
+const Signal = function(options){
+  let signal = {}
+  signal.room = []
+  Signal.emitter(signal)
+  signal.options = options
+  Object.defineProperty(signal,"id",{get:()=>signal.socket.id})
+  signal.socket = io(options.server, {
+    autoConnect: true,
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnection: false,
+    //query: query,
+    path: (new URL(options.server)).pathname,
+    transports: ["websocket"],
+    //perMessageDeflate: false
+  });
+  signal.socket.on("connect",function(){
+    signal.emit("connect")
+  })
+  signal.socket.onAny(function (event, data) {
+    console.log("Signal:On",{event, data});
+    if(event=="room"){
+      //@ if not here create one
+      for(let i=0;i<data.length;i++){
+        let u = data[i]
+        var has = signal.room.some(e=>e.id==u.id)
+        if(has){
+
+        }else{
+          signal.emit("userConnect",u)
+          signal.room.push(u)
+        }
+      }
+      //@ if room inside user not in here erase
+      for(let i=signal.room.length-1;i--;i>-1){
+        var has = data.some(e=>e.id == signal.room[i].id)
+        if(!has){
+          signal.emit("userDisconnect",signal.room.splice(i,1)[0])
+          
+        }
+      }
+
+    }
+    if(event=="message"){
+      let user = signal.room.find(e=>e.id==data.source)
+      data.user = user.user
+      signal.emit("message",data)
+    }
+  });
+  signal.socket.on("waiting",()=>{
+    if(typeof(signal.options.user)!="function"){
+      signal.socket.emit("pass",signal.options.user)
+    }else{
+      signal.options.user().then(user=>{
+        signal.socket.emit("pass",user)
+      })
+    }
+  })
+
+  signal.test = function(){
+    signal.socket.emit("test",console.log)
+  }
+
+  signal.broadcast = function(data){
+    signal.socket.emit("broadcast",data)
+  }
+
+  signal.message = function(data, target){
+    let id = target;
+    if( typeof(target)!="string" && target.id ){
+      id = target.id
+    }
+    signal.socket.emit("message",{to:target,data:data})
+  }
+
+  //@ping test
+  setInterval(()=>{
+
+  })
+
+  return signal
+}
+
+
+
+
+
+Signal.emitter = function (obj) {
+  let triggers = [];
+  obj.any = function (process, order=0) {
+    triggers.push({
+      event:"",
+      process,
+      order,
+      type: 'any'
+    });
+  }
+  obj.on = function (event, process, order=0) {
+    triggers.push({
+      event,
+      process,
+      order,
+      type: 'on'
+    });
+  }
+  obj.one = function (event, process, order=0) {
+    triggers.push({
+      event, 
+      process,
+      order,
+      type: 'once'
+    });
+  }
+  obj.emit = function (event, ...args) {
+    for (let i=0; i<triggers.length ; i++) {
+      const trigger = triggers[i]
+      if (trigger.event == event && trigger.type!="any") {
+        trigger.process.apply(obj, args);
+        if (trigger.type == 'once') {
+          triggers.splice(triggers.indexOf(trigger), 1);
+          i--;
+        }
+      }
+      if(trigger.type=="any"){
+        trigger.process.apply(obj, [event,...args] );
+      }
+    }
+  }
+}
+
+
+
+
+let topluyo_channel_code = params.get("topluyo_channel_code");
+
+if(!params.get("topluyo_channel_code")){
+  topluyo_channel_code = ((Math.random()*0x100000000>>>0).toString(16).padStart(8,0))
+  $("#share-code").value = "https://izletiyo.com/?topluyo_channel_code="+topluyo_channel_code
+}
+
+signal = Signal({
+  server:"https://signal.kuruyo.com/socket/public:"+topluyo_channel_code,
+  user:{
+    "name"  : params.get("topluyo_user_nick"),
+  }
+})
+
+let playerState = 0;
+isHost = false;
+startFilm = "";
+documenter.on("click","[youtube-id]",function(){
+  //value = $("#start-input").value
+  startFilm = this.getAttribute("youtube-id")
+  signal.broadcast({start:startFilm})
+  isHost = true;
+})
+
+function startFilmUI(){
+  $("[results]").style.display="none"
+  $("[search-area]").style.display="none"
+}
+
+signal.on("userConnect", (data) => {
+  if(!isHost) return
+  //value = $("#start-input").value
+  signal.message({start:startFilm},data.id)
+});
+
+signal.on("message",function(data){
+  
+  if(data.data.start){
+    start(data.data.start)
+    startFilmUI()
+    //$("body").classList.add("hide-header")
+  }
+  if(data.data.when){
+    console.log("here")
+    if(playerState==YT.PlayerState.PLAYING)
+      signal.message({play:player.getCurrentTime()},data.source)
+    if(playerState==YT.PlayerState.PAUSED)
+      signal.message({pause:player.getCurrentTime()},data.source)
+  }
+  //!!!!!!!!!!!!!!!
+  if(isHost) return
+
+  if(data.data.play){
+    player.seekTo(data.data.play)
+    player.playVideo()
+  }
+  if(data.data.pause){
+    player.seekTo(data.data.pause)
+    player.pauseVideo()
+  }
+  
+})
+
+function onPlayerReady(e){
+  signal.broadcast({when:true})
+}
+
+
+function onPlayerStateChange (event){
+  if(isHost==false) return
+  console.log(event)
+  playerState = event.data
+  if (event.data == YT.PlayerState.PLAYING){
+    signal.broadcast({
+      play:player.getCurrentTime()
+    })
+  }
+  if (event.data == YT.PlayerState.PAUSED){
+    signal.broadcast({
+      pause:player.getCurrentTime()
+    })
+  }
+}
+
+function start(link){
+  player = new YT.Player('ytplayer', {
+    height: '360',
+    width: '640',
+    videoId: link,
+    playerVars: {
+      'playsinline': 1,
+      "autoplay" : 1
+    },
+    events: {
+      'onReady': onPlayerReady,
+      'onStateChange': onPlayerStateChange
+    }
+  });
+}
+
+    // player.seekTo(20)
+
+  </script>
+
+
+
+  
+  <!-- ARAMA  -->
+  <script>
+    const API_KEY = "AIzaSyCkVaQXiZewUoZfpaN5ZjOiSESdE5gyQXk"
+
+
+    
+
+// Converts ISO 8601 duration (PT1H2M3S) to human-readable
+function formatDuration(iso) {
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  const h = parseInt(match?.[1] || 0);
+  const m = parseInt(match?.[2] || 0);
+  const s = parseInt(match?.[3] || 0);
+  return `${h > 0 ? h + ':' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// YouTube URL'sinden video ID'sini çıkaran fonksiyon
+function extractYouTubeVideoId(url) {
+  const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+  const match = url.match(regex);
+  return match ? match[1] : null;
+}
+
+// URL olup olmadığını kontrol eden fonksiyon
+function isYouTubeURL(text) {
+  return text.includes('youtube.com') || text.includes('youtu.be');
+}
+
+function isValidURL(str) {
+  try {
+    new URL(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+
+
+async function searchYouTube(query) {
+  $("[results]").innerHTML = "";
+  Components.Button.loading($("#search-button"));
+
+  // Step 1: Search for videos with 'music' and filter by Creative Commons
+  const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=24&q=${encodeURIComponent(query + ' music')}&key=${API_KEY}`;
+
+  const searchRes = await fetch(searchUrl);
+  const searchData = await searchRes.json();
+
+  const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+
+  // Step 2: Get video details and filter by Creative Commons
+  let detailUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,status,license&id=${videoIds}&key=${API_KEY}`;
+
+  const detailRes = await fetch(detailUrl);
+  let detailData = await detailRes.json();
+
+  // Filter only embeddable videos with Creative Commons license
+  detailData.items = detailData.items.filter(v => v.status.embeddable && v.license === "creativeCommon");
+
+  // Step 3: Display results
+  detailData.items.forEach(video => {
+    const title = video.snippet.title;
+    const thumbnail = video.snippet.thumbnails.medium.url;
+    const duration = formatDuration(video.contentDetails.duration);
+    const url = `https://www.youtube.com/watch?v=${video.id}`;
+
+    let response = {
+      title,
+      thumbnail,
+      duration,
+      url,
+      id: video.id
+    };
+
+    console.log(response);
+    RenderResult(response);
+  });
+
+  Components.Button.success($("#search-button"));
+}
+
+// Utility function to format video duration
+function formatDuration(duration) {
+  const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+  const hours = match[1] ? parseInt(match[1]) : 0;
+  const minutes = match[2] ? parseInt(match[2]) : 0;
+  const seconds = match[3] ? parseInt(match[3]) : 0;
+
+  return `${hours > 0 ? hours + 'h ' : ''}${minutes > 0 ? minutes + 'm ' : ''}${seconds}s`;
+}
+
+
+  function RenderResult(e){
+    let html = `
+      <div result flex-y gap url="${e.url}" youtube-id="${e.id}">
+        <img src='${e.thumbnail}' style="width:100%">
+        <div flex-y>
+          <b result-title>${e.title}</b>
+          <b result-duration>${e.duration}</b>
+        </div>
+      </div>
+    `
+    $("[results]").innerHTML += html
+  }
+
+
+  </script>
+ 
+
+
+
+<style>
+/* !public/components/button.css */
+button.loading, .button.loading{
+  color: transparent;
+  position: relative;
+}
+
+button.loading:after, .button.loading:after{
+  content:"";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1em;
+  height: 1em;
+  border-radius: 100%;
+  border:2px solid var(--front);
+  clip-path: polygon(0 50%, 100% 50%, 100% 100%, 0% 100%);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+</style>
+
+<script>
+Components = {}
+Components.Button = {}
+
+Components.Button.loading = function(button){
+  button._innerHTML = button.innerHTML
+  //button.innerHTML="...";
+  button.classList.add("loading")
+}
+
+Components.Button.success = function(el){
+  if(!el._innerHTML) el._innerHTML = el.innerHTML;
+  el.style.width = el.offsetWidth + "px";
+  el.style.textAlign = "center"
+  el.innerHTML = "✔"
+  el.classList.remove("loading")
+  setTimeout(e=>{
+    el.innerHTML = el._innerHTML
+    el.style.width = null;
+  },1000)
+}
+</script>
+</header>
+<div search-area style="font-size:1.5em;padding:20px;" spellcheck="false">
+  <div flex-cx padding gap>
+    <input style="font-size:1em;" placeholder="film adı yazın veya YouTube URL'si yapıştırın..." id="search-input" onkeydown="if(event.keyCode==13){searchYouTube($('#search-input').value)} ">
+    <button style="font-size:1em;" onclick="searchYouTube($('#search-input').value)" id="search-button">Ara</button>
+  </div>
+</div>
+<div results grid-3 style="gap:2em;padding:20px;" tablet-style="grid-template-columns: 1fr 1fr;" mobile-style="display:flex;flex-direction:column;">
+
+
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=wmPSBa1SRA4" youtube-id="wmPSBa1SRA4">
+    <img src="https://i.ytimg.com/vi/wmPSBa1SRA4/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Üç Kağıtçı</b>
+      <b result-duration="">1:21:28</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=YHEQO9slYjI" youtube-id="YHEQO9slYjI">
+    <img src="https://i.ytimg.com/vi/YHEQO9slYjI/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Sahte Kabadayı</b>
+      <b result-duration="">1:16:25</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=UQRc5I6jeSA" youtube-id="UQRc5I6jeSA">
+    <img src="https://i.ytimg.com/vi/UQRc5I6jeSA/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Korkusuz Korkak</b>
+      <b result-duration="">1:15:06</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=DkAHxvoA2Q8" youtube-id="DkAHxvoA2Q8">
+    <img src="https://i.ytimg.com/vi/DkAHxvoA2Q8/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Kurtlar Vadisi - 1.Bölüm</b>
+      <b result-duration="">1:28:02</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=YMuqiqc0n2s" youtube-id="YMuqiqc0n2s">
+    <img src="https://i.ytimg.com/vi/YMuqiqc0n2s/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Kurtlar Vadisi Irak</b>
+      <b result-duration="">1:57:41</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=hmKMlf8_FOs" youtube-id="hmKMlf8_FOs">
+    <img src="https://i.ytimg.com/vi/hmKMlf8_FOs/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Kurtlar Vadisi Filistin</b>
+      <b result-duration="">1:45:49</b>
+    </div>
+  </div>
+
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=-mbhzMIJNXk" youtube-id="-mbhzMIJNXk">
+    <img src="https://i.ytimg.com/vi/-mbhzMIJNXk/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Suç Öyküsü | 1993</b>
+      <b result-duration="">1:45:20</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=D-tbqgl9G4Y" youtube-id="D-tbqgl9G4Y">
+    <img src="https://i.ytimg.com/vi/D-tbqgl9G4Y/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Afrika Kaplanı Jackie Chan</b>
+      <b result-duration="">2:00:28</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=iQnaaeW1ylI" youtube-id="iQnaaeW1ylI">
+    <img src="https://i.ytimg.com/vi/iQnaaeW1ylI/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">TANRININ ZIRHI | Türkçe Dublajlı Film | Aksiyon Filmi | JACKIE CHAN | Film Şimdi</b>
+      <b result-duration="">1:28:31</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=lZs4aIN4kqQ" youtube-id="lZs4aIN4kqQ">
+    <img src="https://i.ytimg.com/vi/lZs4aIN4kqQ/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Hep Yek | Türk Komedi Filmi</b>
+      <b result-duration="">1:21:17</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=OlTYx9gJRT0" youtube-id="OlTYx9gJRT0">
+    <img src="https://i.ytimg.com/vi/OlTYx9gJRT0/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Düğün Dernek 2 Sünnet Tek Parça</b>
+      <b result-duration="">1:35:07</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=vYxfYd3eDkA" youtube-id="vYxfYd3eDkA">
+    <img src="https://i.ytimg.com/vi/vYxfYd3eDkA/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Ata Demirer - Tek Kişilik Dev Kadro 2 | Full Bölüm</b>
+      <b result-duration="">1:37:37</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=RUfvpcjsiQM" youtube-id="RUfvpcjsiQM">
+    <img src="https://i.ytimg.com/vi/RUfvpcjsiQM/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Ata Demirer - Tek Kişilik Dev Kadro 1 | Full Bölüm</b>
+      <b result-duration="">1:43:48</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=AE6vzgCHjn0" youtube-id="AE6vzgCHjn0">
+    <img src="https://i.ytimg.com/vi/AE6vzgCHjn0/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Baturay Özdemir - Biraz Daha | Stand-up Gösterisi (2023)</b>
+      <b result-duration="">1:35:25</b>
+    </div>
+  </div>
+
+  <div result="" flex-y="" gap="" url="https://www.youtube.com/watch?v=0DEt9wB-hRc" youtube-id="0DEt9wB-hRc">
+    <img src="https://i.ytimg.com/vi/0DEt9wB-hRc/mqdefault.jpg" style="width:100%">
+    <div flex-y="">
+      <b result-title="">Ali Congun - “Şehir Eliti” Stand-up Gösterisi | TuzBiber Stand-Up</b>
+      <b result-duration="">1:16:43</b>
+    </div>
+  </div>
+</div>
+<div id="ytplayer"></div>
